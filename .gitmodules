@@ -1,0 +1,3 @@
+[submodule "ext/aiovelib"]
+	path = dbus-homewizard/ext/aiovelib
+	url = https://github.com/victronenergy/aiovelib.git
