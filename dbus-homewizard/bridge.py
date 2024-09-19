@@ -29,7 +29,9 @@ class HwDbusBridge:
         assert isinstance(position, int) and 0 <= position <= 2
         assert isinstance(name, str)
 
-        self.url = f"http://{ip}/api/v1/data"
+        self.ip = ip
+        self.api_url = f"http://{ip}/api"
+        self.data_url = self.api_url + "/v1/data"
         self.role = role
         self.dev_idx = dev_idx
         self.position = position
@@ -39,14 +41,14 @@ class HwDbusBridge:
         self.phase = phase
         self.service = None
 
-    async def register_dbus(self):
+    async def register_dbus(self, serial, product, fw_version):
         # Setup the dbus service for the session bus
         await self.unregister_dbus()
         bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
         service = Service(bus, self.dbus_name)
 
         # Create the generic dbus service objects
-        service.add_item(TextItem('/ProductName', 'Homewizard kWh meter'))
+        service.add_item(TextItem('/ProductName', f'HomeWizard {product}'))
         service.add_item(TextItem('/Mgmt/ProcessName', os.path.basename(os.path.dirname(__file__))))
         service.add_item(TextItem('/Mgmt/ProcessVersion', 'Unknown version'))
         service.add_item(TextItem('/Mgmt/Connection', 'Ethernet'))
@@ -54,10 +56,10 @@ class HwDbusBridge:
         service.add_item(IntegerItem('/DeviceInstance', self.dev_idx))
         service.add_item(IntegerItem('/ProductId', 45069))  # Carlo Gavazzi ET 340 Energy Meter
         service.add_item(IntegerItem('/DeviceType', 345))   # ET340 Energy Meter
-        service.add_item(TextItem('/FirmwareVersion', "0.1"))
+        service.add_item(TextItem('/FirmwareVersion', fw_version))
         service.add_item(TextItem('/HardwareVersion', None))
         service.add_item(TextItem('/Role', self.role))
-        service.add_item(TextItem('/Serial', None))
+        service.add_item(TextItem('/Serial', serial))
         service.add_item(IntegerItem('/ErrorCode', 0, writeable=True))
         service.add_item(IntegerItem('/StatusCode', 0, writeable=True))
         if self.role == 'pvinverter':
@@ -101,22 +103,26 @@ class HwDbusBridge:
             self.service.__del__()
         self.service = None
 
-    def __get_hw_data(self):
+    def __get_hw(self, url):
         try:
-            response = requests.get(self.url, timeout=3)
+            response = requests.get(url, timeout=3)
         except requests.exceptions.Timeout:
             print(f"No responce on our GET request to {url}", file=sys.stderr)
             return None
         try:
             data = response.json()
         except requests.exceptions.JSONDecodeError:
-            print(f"Unexpected response from {self.url}", file=sys.stderr)
+            print(f"Unexpected response from {url}", file=sys.stderr)
             return None
         return data
 
     async def get_hw_data(self, loop=None):
         loop = loop or asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self.__get_hw_data)
+        return await loop.run_in_executor(None, self.__get_hw, self.data_url)
+
+    async def get_hw_info(self, loop=None):
+        loop = loop or asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.__get_hw, self.api_url)
 
     def update_dbus(self, data):
         try:
@@ -161,7 +167,27 @@ class HwDbusBridge:
 
     async def run(self):
         loop = asyncio.get_running_loop()
-        await self.register_dbus()
+
+        print(f"Contacting HomeWizard device at {self.ip}...")
+        while True:
+            info = await self.get_hw_info(loop)
+            if info is not None:
+                break
+            await asyncio.sleep(5)
+
+        serial = info['serial']
+        fw_version = info['firmware_version']
+        api_version = info['api_version']
+        product_type = info['product_type']
+
+        print(f"Found HomeWizard {product_type} with serial {serial}")
+        if api_version != "v1":
+            print("ERROR: The device has an unsupported api "
+                  f"version: {api_version}", file=sys.stderr)
+            sys.exit(1)
+
+        # Register the HomeWizard device with the Victron services
+        await self.register_dbus(serial, product_type, fw_version)
 
         while True:
             start = time.time()
