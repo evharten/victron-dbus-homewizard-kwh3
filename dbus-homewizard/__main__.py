@@ -14,6 +14,9 @@ from .bridge import HwDbusBridge, ROLES
 parser = argparse.ArgumentParser()
 parser.add_argument('ip', metavar='IP', type=str,
     help="IP address of a Homewizard kWh meter")
+parser.add_argument('name', metavar='NAME', type=str,
+    help="Unique name for the dbus service for destinction. " \
+        "Can be a device location or interface i.e. 'pv_roof' or 'p1'")
 parser.add_argument('--role', default="pvinverter", choices=ROLES,
     help="What is the source of the power the device measures [default: %(default)s]")
 parser.add_argument('--instance', metavar='NUMBER', type=int, default=10,
@@ -22,8 +25,6 @@ parser.add_argument('--phase', type=int, default=1, choices=(1, 2, 3),
     help="Phase number we're monitoring (In case of single phase meter) [default: %(default)d]")
 parser.add_argument('--position', type=int, default=0, choices=(0, 1, 2),
     help="0=AC input 1; 1=AC output; 2=AC input 2  [default: %(default)d]")
-parser.add_argument('--name', default='homewizard',
-    help="Unique postfix for the dbus service name for separation and identification [default: %(default)s]")
 parser.add_argument('--maxpower', type=int,
     help="Max rated power (in Watts) of the inverter")
 parser.add_argument('--pollinterval', type=float, default=1,
