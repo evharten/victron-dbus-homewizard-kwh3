@@ -93,8 +93,8 @@ class HwDbusBridge:
             service.add_item(DoubleItem(prefix + '/Voltage', initial, writeable=writable, text=unit_volt))
             service.add_item(DoubleItem(prefix + '/Current', initial, writeable=writable, text=unit_amp))
             service.add_item(DoubleItem(prefix + '/Power', initial, writeable=writable, text=unit_watt))
-            service.add_item(DoubleItem(prefix + '/Energy/Forward', initial, writeable=writable, text=unit_kwh))
-            service.add_item(DoubleItem(prefix + '/Energy/Reverse', initial, writeable=writable, text=unit_kwh))
+            #service.add_item(DoubleItem(prefix + '/Energy/Forward', initial, writeable=writable, text=unit_kwh))
+            #service.add_item(DoubleItem(prefix + '/Energy/Reverse', initial, writeable=writable, text=unit_kwh))
         await service.register()
         self.service = service
 
@@ -129,11 +129,18 @@ class HwDbusBridge:
             energy_exp = data['total_power_export_kwh']
             energy_imp = data['total_power_import_kwh']
             power = data['active_power_w']
-            voltage = data['active_voltage_v']
-            current = data['active_current_a']
+            power_l1 = data['active_power_l1_w']
+            voltage_l1 = data['active_voltage_l1_v']
+            current_l1 = data['active_current_l1_a']
+            power_l2 = data['active_power_l2_w']
+            voltage_l2 = data['active_voltage_l2_v']
+            current_l2 = data['active_current_l2_a']
+            power_l3 = data['active_power_l3_w']
+            voltage_l3 = data['active_voltage_l3_v']
+            current_l3 = data['active_current_l3_a']
         except (KeyError, TypeError) as exc:
             # data==None or is missing essential keys
-            energy_exp = energy_imp = power = voltage = current = None
+            power_l1 = power_l2 = power_l3 = voltage_l1 = voltage_l2 = voltage_l3 = current_l1 = current_l2 = current_l3 = energy_exp = energy_imp = power = None
             connected = 0
         else:
             connected = 1
@@ -142,6 +149,10 @@ class HwDbusBridge:
             # Power is expected to be as seen from the inverter stand point
             # not from the grid so we need to inverse the readings.
             power = power * -1
+            power_l1 = power_l1 * -1
+            power_l2 = power_l2 * -1
+            power_l3 = power_l3 * -1
+
             energy_fw = energy_exp
             energy_rv = energy_imp
         else:
@@ -153,12 +164,15 @@ class HwDbusBridge:
             ctx["/Connected"] = connected
 
             # Phase data
-            prefix = f'/Ac/L{self.phase}'
-            ctx[prefix + "/Voltage"] = voltage
-            ctx[prefix + "/Current"] = current
-            ctx[prefix + "/Power"] = power
-            ctx[prefix + "/Energy/Forward"] = energy_fw
-            ctx[prefix + "/Energy/Reverse"] = energy_rv
+            ctx["/Ac/L1" + "/Voltage"] = voltage_l1
+            ctx["/Ac/L1" + "/Current"] = current_l1
+            ctx["/Ac/L1" + "/Power"] = power_l1
+            ctx["/Ac/L2" + "/Voltage"] = voltage_l2
+            ctx["/Ac/L2" + "/Current"] = current_l2
+            ctx["/Ac/L2" + "/Power"] = power_l2
+            ctx["/Ac/L3" + "/Voltage"] = voltage_l3
+            ctx["/Ac/L3" + "/Current"] = current_l3
+            ctx["/Ac/L3" + "/Power"] = power_l3
 
             # Totals
             ctx["/Ac/Power"] = power
